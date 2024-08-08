@@ -1,5 +1,4 @@
-```javascript
-// First, include tracking.js in your HTML:
+// Make sure to include tracking.js in your HTML:
 // <script src="https://cdnjs.cloudflare.com/ajax/libs/tracking.js/1.1.3/tracking-min.js"></script>
 
 const video = document.getElementById('video');
@@ -19,26 +18,50 @@ const images = {
     morr: { src: 'items/morr.png', img: new Image() }
 };
 
-Object.values(images).forEach(img => {
-    img.img.src = img.src;
-    img.img.onload = () => console.log(`Loaded ${img.src}`);
-});
+function loadImages() {
+    return Promise.all(Object.values(images).map(img => {
+        return new Promise((resolve, reject) => {
+            img.img.onload = () => {
+                console.log(`Loaded ${img.src}`);
+                resolve();
+            };
+            img.img.onerror = () => reject(`Failed to load ${img.src}`);
+            img.img.src = img.src;
+        });
+    }));
+}
 
 // Set up video streaming
-navigator.mediaDevices.getUserMedia({ video: true })
-    .then(function(stream) {
-        video.srcObject = stream;
-        video.play();
-    })
-    .catch(function(err) {
-        console.log("An error occurred: " + err);
-    });
+function setupCamera() {
+    return navigator.mediaDevices.getUserMedia({ video: true })
+        .then(function(stream) {
+            video.srcObject = stream;
+            return new Promise((resolve) => {
+                video.onloadedmetadata = () => {
+                    video.play();
+                    resolve();
+                };
+            });
+        })
+        .catch(function(err) {
+            console.error("Camera error:", err);
+            alert("Unable to access the camera. Please make sure you've granted the necessary permissions.");
+        });
+}
 
-video.addEventListener('play', function() {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    trackFace();
-});
+function initializeApp() {
+    Promise.all([loadImages(), setupCamera()])
+        .then(() => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            console.log("Video dimensions:", video.videoWidth, "x", video.videoHeight);
+            trackFace();
+        })
+        .catch(error => {
+            console.error("Initialization error:", error);
+            alert("There was an error initializing the app. Please check the console for more details.");
+        });
+}
 
 function trackFace() {
     const tracker = new tracking.ObjectTracker('face');
@@ -52,6 +75,8 @@ function trackFace() {
         context.clearRect(0, 0, canvas.width, canvas.height);
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+        console.log("Detected faces:", event.data.length);
+
         event.data.forEach(function(rect) {
             if (isCapturing) {
                 drawFeatures(rect);
@@ -62,6 +87,7 @@ function trackFace() {
 
 function drawFeatures(rect) {
     const scale = Math.min(rect.width, rect.height);
+    console.log("Face rectangle:", rect);
     
     // Draw horns
     const hornWidth = scale * 0.8;
@@ -83,6 +109,7 @@ function drawFeatures(rect) {
 captureBtn.addEventListener('click', function() {
     isCapturing = !isCapturing;
     captureBtn.textContent = isCapturing ? "Reset" : "Capture and Add Features";
+    console.log("Capture mode:", isCapturing);
 });
 
 saveBtn.addEventListener('click', function() {
@@ -90,5 +117,11 @@ saveBtn.addEventListener('click', function() {
     link.download = 'demon-meme.png';
     link.href = canvas.toDataURL();
     link.click();
+    console.log("Meme saved");
 });
-```
+
+// Initialize the app
+document.addEventListener('DOMContentLoaded', initializeApp);
+
+// Add this line to check if the script is loading
+console.log("Script loaded:", new Date().toISOString());
